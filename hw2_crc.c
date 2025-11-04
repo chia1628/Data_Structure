@@ -94,11 +94,13 @@ NODE* COMPARE(NODE* G, NODE* D){
             else{
                 pD_prev -> next = pD;
             }
-            
+            //pD = pD -> next;
             pG = pG -> next;
         }
-        printf("Current D: ");
+        printf("Current NEW_HEAD: ");
         PRINT(NEW_HEAD);
+        printf("Current D: ");
+        PRINT(D);
         printf("Current G: ");
         PRINT(pG);
     }
