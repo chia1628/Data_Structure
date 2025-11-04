@@ -70,12 +70,18 @@ NODE* COMPARE(NODE* G, NODE* D){
         if(pD == NULL){
             INSERT_after(pD_prev, pG->poly);
             pG = pG->next;
+            pD = pD_prev->next;
         }
         else if(pG -> poly == pD -> poly){
             pG = pG -> next;
             printf("Deleting %d\n", pD -> poly);
             pD = DELETE(pD_prev, pD);
-            pD_prev = NULL;
+            if(pD_prev == NULL){
+                pD_prev = NULL;
+            }
+            else{
+                pD_prev = pD_prev;
+            }
         }
         else if(pG -> poly < pD -> poly){
             printf("%d < %d\n", pG -> poly, pD -> poly);
@@ -101,6 +107,8 @@ NODE* COMPARE(NODE* G, NODE* D){
         PRINT(NEW_HEAD);
         printf("Current D: ");
         PRINT(D);
+        printf("Current pD: ");
+        PRINT(pD);
         printf("Current G: ");
         PRINT(pG);
     }
