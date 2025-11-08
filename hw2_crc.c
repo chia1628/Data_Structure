@@ -60,6 +60,15 @@ void PRINT(NODE* LIST){
     }
 }
 
+void FREE_LIST(NODE* head) {
+    NODE* tmp;
+    while (head != NULL) {
+        tmp = head;
+        head = head->next;
+        free(tmp);
+    }
+}
+
 NODE* COMPARE(NODE* G, NODE* D){
     NODE* pG;
     NODE* pD, *pD_prev = NULL;
@@ -68,39 +77,45 @@ NODE* COMPARE(NODE* G, NODE* D){
     pD = D;
     while(pG != NULL){
         if(pD == NULL){
-            INSERT_after(pD_prev, pG->poly);
-            pG = pG->next;
-            pD = pD_prev->next;
+			if(pD_prev!=NULL){
+				INSERT_after(pD_prev, pG -> poly);
+				pG = pG -> next;
+				pD = pD_prev -> next;
+			}
+			else{
+				NEW_HEAD = (NODE*)malloc(sizeof(NODE));
+				NEW_HEAD -> poly = pG -> poly;
+				NEW_HEAD -> next = NULL;
+			}
         }
         else if(pG -> poly == pD -> poly){
             pG = pG -> next;
             printf("Deleting %d\n", pD -> poly);
-            pD = DELETE(pD_prev, pD);
+            pD = DELETE(pD_prev, pD); // Delete the node pD which comes after pD_prev
             if(pD_prev == NULL){
-                pD_prev = NULL;
+                pD_prev = NULL; // means there is no head
             }
             else{
-                pD_prev = pD_prev;
+                pD_prev = pD_prev; // means prev is the same
             }
         }
         else if(pG -> poly < pD -> poly){
             printf("%d < %d\n", pG -> poly, pD -> poly);
             if(NEW_HEAD==NULL){
-                NEW_HEAD = pD;
+                NEW_HEAD = pD; // if head is empty, then we set it as new head
             }
             pD_prev = pD;
             pD = pD -> next;
         }
         else{ // pG -> poly > pD -> poly
-            pD = INSERT_before(pD, pG -> poly);
+            pD = INSERT_before(pD, pG -> poly); // insert before pd
             if(NEW_HEAD==NULL){
                 NEW_HEAD = pD;
-                pD_prev  = pD;
+                pD_prev  = NULL;
             }
             else{
                 pD_prev -> next = pD;
             }
-            //pD = pD -> next;
             pG = pG -> next;
         }
         printf("Current NEW_HEAD: ");
@@ -162,7 +177,7 @@ int hex_to_byte_value(char* hex, int* ascii) {
 }
 
 int main(){
-    NODE *G_ORI, *P, *D, *G_new;
+    NODE *G_ORI, *P, *D;
     char input_data[3];
     int ascii[5];
     char binary_string[16] = {0};
@@ -172,7 +187,7 @@ int main(){
     D = (NODE*)malloc(sizeof(NODE));
     D -> next = NULL;
     G_ORI = (NODE*)malloc(sizeof(NODE));
-    G_ORI -> next = NULL; 
+    G_ORI -> next = NULL;
     P = G_ORI;
     for (int i=0; i<3; i++){
         printf("currenct data: %d\n", poly_ori[i]);
@@ -182,7 +197,7 @@ int main(){
     G_ORI = G_ORI -> next; // Move to the first actual node
     PRINT(G_ORI);
     printf("G_ORI initialized\n");
-    
+
     for (int i=0; i<8; i++){
         printf("%c", binary_string[i]);
     }
@@ -205,15 +220,15 @@ int main(){
         }
     }
     D  = D  -> next; // Move to the first actual node
-    printf("D before COMPARE: \n");
-    PRINT(D);
-    printf("D before UPDATE: \n");
-    PRINT(D);
-    printf("\n");
+    // printf("D before COMPARE: \n");
+    // PRINT(D);
+	// printf("D before UPDATE: \n");
+    // PRINT(D);
+    // printf("\n");
     UPDATE(D, 4);
-    printf("D AFTER UPDATE: \n");
-    PRINT(D);
-    printf("\n");
+    // printf("D AFTER UPDATE: \n");
+    // PRINT(D);
+    // printf("\n");
     while(D->poly > 3){
         int shift = D->poly - 4;
         NODE *G_new;
@@ -221,25 +236,30 @@ int main(){
         G_new -> next = NULL;
         P = G_new;
         for (int i=0; i<3; i++){
-            printf("currenct data: %d\n", poly_ori[i]);
+            // printf("currenct data: %d\n", poly_ori[i]);
             P = INSERT_after(P, poly_ori[i]+shift);
-            printf("currenct data: %d\n", P->poly);
+            // printf("currenct data: %d\n", P->poly);
         }
         G_new = G_new -> next; // Move to the first actual node
         PRINT(G_new);
         printf("G_ORI initialized\n");
-        printf("G_new before COMPARE: \n");
+        printf("G_new before COMPARE:");
         PRINT(G_new);
         printf("\n");
-        printf("D before COMPARE: \n");
+        printf("D before COMPARE:");
         PRINT(D);
         D = COMPARE(G_new, D);
-        printf("D AFTER COMPARE: \n");
+        printf("D AFTER COMPARE:");
         PRINT(D);
         printf("\n");
     }
-    
-    free(G_ORI);
-    free(D);
+	for(int i=3; i>=0; i--){
+        if(D -> poly == i){
+            printf("%d ", 1);
+            D = D -> next;
+        }
+    }
+    FREE_LIST(G_ORI);
+    FREE_LIST(D);
     return 0;
 }
