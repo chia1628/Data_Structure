@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 // 定義可以執行的模式種類
@@ -116,6 +117,85 @@ void display_huffman_tree(HuffmanNode* node, int level) {
     display_huffman_tree(node->left, level + 1);
 }
 
+void encode(HuffmanNode* node, int level) {
+    if (!node) return;
+        // 先顯示右子節點（這樣顯示時，樹的右邊在上）
+    
+    if(node->right){
+        printf("%d", 1);
+        encode(node->right, level + 1);
+    }
+    
+
+
+    // 縮排
+    for (int i = 0; i < level; i++) printf("    ");
+
+    // 如果是葉節點，顯示符號和頻率
+    if (!node->left && !node->right) { //兩個都是null
+        if (node->symbol >= 32 && node->symbol <= 126) {
+            printf("'%c' (%d)\n", node->symbol, node->freq);
+        } else {
+            printf("0x%02X (%d)\n", node->symbol, node->freq);
+        }
+    } else {
+        printf("* (%d)\n", node->freq); // internal node
+    }
+
+    // 左子節點
+    encode(node->left, level + 1);
+}
+
+// ---------------- Generate Huffman Codes ----------------
+void generate_codes(HuffmanNode* node, char* code, int depth, char codes[MAX_SYMBOLS][MAX_CODE_LEN]) {
+    if (!node) return;
+
+    if (!node->left && !node->right) {
+        code[depth] = '\0';
+        strcpy(codes[node->symbol], code);
+        return;
+    }
+
+    code[depth] = '0';
+    generate_codes(node->left, code, depth + 1, codes);
+    code[depth] = '1';
+    generate_codes(node->right, code, depth + 1, codes);
+}
+
+// ---------------- Free Huffman Tree ----------------
+void free_tree(HuffmanNode* node) {
+    if (!node) return;
+    free_tree(node->left);
+    free_tree(node->right);
+    free(node);
+}
+
+// ---------------- Write Compressed File ----------------
+void compress_file(FILE* fin, FILE* fout, char codes[MAX_SYMBOLS][MAX_CODE_LEN]) {
+    fseek(fin, 0, SEEK_SET); // rewind input file
+    int c;
+    unsigned char buffer = 0;
+    int bit_count = 0;
+
+    while ((c = fgetc(fin)) != EOF) {
+        char* code = codes[c];
+        for (int i = 0; code[i]; i++) {
+            buffer <<= 1;
+            if (code[i] == '1') buffer |= 1;
+            bit_count++;
+            if (bit_count == 8) {
+                fputc(buffer, fout);
+                buffer = 0;
+                bit_count = 0;
+            }
+        }
+    }
+    if (bit_count > 0) {
+        buffer <<= (8 - bit_count);
+        fputc(buffer, fout);
+    }
+}
+
 void compress(){
 
 }
@@ -190,7 +270,7 @@ int main(int argc, char *argv[]) {
 
     int a = count_frequency(fin, freq);
     HuffmanNode* root = build_huffman_tree(freq);
-    // display_huffman_tree(root, 0);
+    encode(root, 0);
 
     return 0;
 }
