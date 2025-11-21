@@ -100,16 +100,20 @@ void display_huffman_tree(HuffmanNode* node, int level) {
     display_huffman_tree(node->right, level + 1);
 
     // 縮排
-    for (int i = 0; i < level; i++) printf("    ");
+    for (int i = 0; i < level; i++){
+        printf("    ");
+    } 
 
     // 如果是葉節點，顯示符號和頻率
     if (!node->left && !node->right) { //兩個都是null
         if (node->symbol >= 32 && node->symbol <= 126) {
             printf("'%c' (%d)\n", node->symbol, node->freq);
-        } else {
+        } 
+        else {
             printf("0x%02X (%d)\n", node->symbol, node->freq);
         }
-    } else {
+    } 
+    else {
         printf("* (%d)\n", node->freq); // internal node
     }
 
@@ -146,20 +150,20 @@ void encode(HuffmanNode* node, int level) {
     encode(node->left, level + 1);
 }
 
-// ---------------- Generate Huffman Codes ----------------
+// 產生編碼
 void generate_codes(HuffmanNode* node, char* code, int depth, char codes[MAX_SYMBOLS][MAX_CODE_LEN]) {
     if (!node) return;
 
-    if (!node->left && !node->right) {
+    if (!node->left && !node->right) { //如果是葉子
         code[depth] = '\0';
         strcpy(codes[node->symbol], code);
         return;
     }
 
     code[depth] = '0';
-    generate_codes(node->left, code, depth + 1, codes);
+    generate_codes(node->left, code, depth + 1, codes); // 先往左放0
     code[depth] = '1';
-    generate_codes(node->right, code, depth + 1, codes);
+    generate_codes(node->right, code, depth + 1, codes); // 再往右放1
 }
 
 // ---------------- Free Huffman Tree ----------------
