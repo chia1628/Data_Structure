@@ -1,7 +1,0 @@
-Huffman Table:
-Char 0x00: 0
-Char 0x01: 1
-Char 0x02: 00
-
-Compressed Data (bits):
-
