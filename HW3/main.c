@@ -248,32 +248,36 @@ void calculate_code_lengths(HuffmanNode* node, int depth, int lengths[MAX_SYMBOL
 
 // 取代原本的 fix_code_lengths（簡單、穩定、合法）
 // 規則：只針對「出現過的符號」(lengths[i] > 0) 做事；
-//      若 k > 2^L → 直接報錯；否則全部設為 L（一定滿足 Kraft，不會解崩）
+// 只在超過 limit_L 時才套用長度限制；否則不更動
 void fix_code_lengths(int lengths[MAX_SYMBOLS], int limit_L) {
-    if (limit_L <= 0) return;
+    if (limit_L <= 0) return;   // 沒有限制，直接用原碼長
 
-    // 收集「真的有出現」的符號
     int present[MAX_SYMBOLS];
-    int k = 0;
+    int k = 0, max_len = 0;
+
+    // 蒐集「真的出現過」的符號，並找原本的最大碼長
     for (int i = 0; i < MAX_SYMBOLS; i++) {
-        if (lengths[i] > 0) {    // 只有葉節點(出現過的符號)會被 calculate_code_lengths() 設到 >0
+        if (lengths[i] > 0) {
             present[k++] = i;
+            if (lengths[i] > max_len) max_len = lengths[i];
         }
     }
-    if (k == 0) return;          // 空檔案之類的，就不動作
+    if (k == 0) return;                 // 空檔案之類，不處理
+    if (max_len <= limit_L) return;     // ✅ 沒超過限制：完全不更動
 
-    // 檢查 L 是否足夠：k <= 2^L
+    // 底下這段只在「真的超過」時才執行
     if (limit_L < 31 && k > (1 << limit_L)) {
-        fprintf(stderr, "Error: L=%d 無法編 %d 種符號（需要 L >= ceil(log2(%d))）\n", limit_L, k, k);
+        fprintf(stderr, "Error: L=%d CAN'T ENCODE %d SYMBOLS NEED L >= ceil(log2(%d)\n",
+                limit_L, k, k);
         exit(1);
     }
 
-    // 全部設為 L（保證 Kraft，不再出現把 0/1/2 這些沒出現的索引塞進碼表）
+    // 最簡、穩定的保底作法：全部設為 L（一定滿足 Kraft，確保可解）
     for (int i = 0; i < k; i++) {
-        int s = present[i];
-        lengths[s] = limit_L;
+        lengths[present[i]] = limit_L;
     }
 }
+
 
 
 
@@ -391,6 +395,7 @@ void decompress_file_bin(FILE* fin, FILE* fout) {
 
     int c;
     while ((c = fgetc(fin)) != EOF) {
+        printf("c: %d\n", c);
         buffer = (unsigned char)c;
         for (int i = 7; i >= 0; i--) {
             bit_acc = (bit_acc << 1) | ((buffer >> i) & 1);
@@ -402,6 +407,11 @@ void decompress_file_bin(FILE* fin, FILE* fout) {
             for (int j = 0; j < num_symbols; j++) {
                 uint32_t code_masked = table[j].code & ((1 << table[j].length) - 1);
                 if (bit_count == table[j].length && bit_acc == table[j].code) {
+                    printf("bit_acc (%2d bits) = ", bit_count);
+                    for (int k = bit_count - 1; k >= 0; k--) {
+                        printf("%d", (bit_acc >> k) & 1);
+                    }
+                    printf("\n");
                     fputc(table[j].symbol, fout);
                     bit_acc = 0;
                     bit_count = 0;
