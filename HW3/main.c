@@ -134,61 +134,43 @@ void display_huffman_tree(HuffmanNode* node, int level) {
     display_huffman_tree(node->left, level + 1);
 }
 // ---------------- Write Compressed File ----------------
-void compress_file_txt(FILE* fin, FILE* fout, char codes[MAX_SYMBOLS][MAX_CODE_LEN]) {
-    fseek(fin, 0, SEEK_SET); // rewind
+// ===== Header: "HUF1" + original_size + L + num_symbols + (symbol, length)*n =====
+static int write_header(FILE* fo, uint32_t original_size, uint8_t limit_L, const int lengths[256]) {
+    if (fwrite("HUF1", 1, 4, fo) != 4) return -1;
+    if (fwrite(&original_size, sizeof(uint32_t), 1, fo) != 1) return -1;
+    if (fwrite(&limit_L, 1, 1, fo) != 1) return -1;
 
-    fprintf(fout, "Huffman Table:\n");
-    for (int i = 0; i < MAX_SYMBOLS; i++) {
-        if (codes[i][0] != '\0') {
-            if (i >= 32 && i <= 126)
-                fprintf(fout, "Char '%c' (%d): %s\n", i, i, codes[i]);
-            else
-                fprintf(fout, "Char 0x%02X: %s\n", i, codes[i]);
+    uint16_t num = 0;
+    for (int i = 0; i < 256; i++) if (lengths[i] > 0) num++;
+    if (fwrite(&num, sizeof(uint16_t), 1, fo) != 1) return -1;
+
+    for (int i = 0; i < 256; i++) {
+        if (lengths[i] > 0) {
+            unsigned char s = (unsigned char)i;
+            unsigned char L  = (unsigned char)lengths[i];
+            if (fwrite(&s, 1, 1, fo) != 1) return -1;
+            if (fwrite(&L, 1, 1, fo) != 1) return -1;
         }
     }
-
-    fprintf(fout, "\nCompressed Data (bits):\n");
-    int c;
-    while ((c = fgetc(fin)) != EOF) {
-        fprintf(fout, "%s", codes[c]);
-    }
-    fprintf(fout, "\n");
+    return 0;
 }
 
-void compress_file_bin(FILE* fin, FILE* fout, char codes[MAX_SYMBOLS][MAX_CODE_LEN]) {
-    fseek(fin, 0, SEEK_SET); // rewind
 
-    // 1. 寫 Huffman table
-    int num_symbols = 0;
-    for (int i = 0; i < MAX_SYMBOLS; i++)
-        if (codes[i][0] != '\0') num_symbols++;
-    
-    fputc(num_symbols, fout); // 總共幾個 symbol
-    
-    for (int i = 0; i < MAX_SYMBOLS; i++) {
-        if (codes[i][0] == '\0') continue;
-
-        unsigned char len = strlen(codes[i]);
-        fputc(i, fout);    // symbol
-        fputc(len, fout);  // code 長度
-
-        uint32_t bits = 0;
-        for (int j = 0; j < len; j++) {
-            bits <<= 1;
-            if (codes[i][j] == '1') bits |= 1;
-        }
-        int bytes_needed = (len + 7) / 8;
-        for (int b = bytes_needed - 1; b >= 0; b--) {
-            fputc((bits >> (8*b)) & 0xFF, fout);
-        }
+void compress_file_bin(FILE* fin, FILE* fout, char codes[MAX_SYMBOLS][MAX_CODE_LEN],
+                       uint32_t original_size, int lengths[256], int limit_length) {
+    uint8_t Lhdr = (limit_length > 0) ? (uint8_t)limit_length : 0;
+    if (write_header(fout, original_size, Lhdr, lengths) != 0) {
+        fprintf(stderr, "write header failed\n");
+        exit(1);
     }
 
-    // 2. 寫壓縮資料
+    // 寫 bitstream（沿用你原本的 byte 緩衝）
+    fseek(fin, 0, SEEK_SET);
     unsigned char buffer = 0;
     int bit_count = 0;
     int c;
     while ((c = fgetc(fin)) != EOF) {
-        char* code = codes[c];
+        const char* code = codes[(unsigned char)c];
         for (int i = 0; code[i]; i++) {
             buffer <<= 1;
             if (code[i] == '1') buffer |= 1;
@@ -327,20 +309,25 @@ void compress(FILE* fin, FILE* fout, int limit_length){
     int freq[MAX_SYMBOLS] = {0};
     count_frequency(fin, freq);
 
+    // 算原始長度（直接把 freq 加總）
+    uint32_t original_size = 0;
+    for (int i = 0; i < MAX_SYMBOLS; i++) original_size += (uint32_t)freq[i];
+
     HuffmanNode* root = build_huffman_tree(freq);
 
-    // 計算限制長度 code 長度
     int lengths[MAX_SYMBOLS] = {0};
     calculate_code_lengths(root, 0, lengths);
     fix_code_lengths(lengths, limit_length);
-    // 生成 code
+
     char codes[MAX_SYMBOLS][MAX_CODE_LEN];
-    for(int i=0;i<MAX_SYMBOLS;i++) codes[i][0] = '\0';
+    for (int i = 0; i < MAX_SYMBOLS; i++) codes[i][0] = '\0';
     generate_limited_codes(lengths, codes);
 
-    compress_file_bin(fin, fout, codes);
+    // ✅ 新版：帶 original_size + lengths
+    compress_file_bin(fin, fout, codes, original_size, lengths, limit_length);
     free_tree(root);
 }
+
 
 typedef struct {
     unsigned int code;
@@ -380,47 +367,105 @@ void print_huffman_table(CodeEntry table[MAX_SYMBOLS], int num_symbols) {
         printf("\n");
     }
 }
+static int read_header(FILE* fi, uint32_t* original_size, uint8_t* limit_L, int lengths[256]) {
+    char magic[4];
+    if (fread(magic, 1, 4, fi) != 4) return -1;
+    if (memcmp(magic, "HUF1", 4) != 0) return -2;
+    if (fread(original_size, sizeof(uint32_t), 1, fi) != 1) return -3;
+    if (fread(limit_L, 1, 1, fi) != 1) return -4;
+    uint16_t num = 0;
+    if (fread(&num, sizeof(uint16_t), 1, fi) != 1) return -5;
+
+    memset(lengths, 0, 256 * sizeof(int));
+    for (uint16_t i = 0; i < num; i++) {
+        unsigned char sym, len;
+        if (fread(&sym, 1, 1, fi) != 1) return -6;
+        if (fread(&len, 1, 1, fi) != 1) return -7;
+        lengths[sym] = (int)len;
+    }
+    return (int)num;
+}
+
+// 由 lengths 依 canonical 規則重建 bit pattern（用你現有的 generate_limited_codes）
+static void build_codes_from_lengths(const int lengths[256], CodeEntry table[256], int* out_n) {
+    char codes[256][MAX_CODE_LEN];
+    for (int i = 0; i < 256; i++) codes[i][0] = '\0';
+    generate_limited_codes((int*)lengths, codes);
+
+    int n = 0;
+    for (int s = 0; s < 256; s++) {
+        if (lengths[s] > 0) {
+            unsigned acc = 0;
+            for (int k = 0; codes[s][k]; k++) {
+                acc = (acc << 1) | (codes[s][k] == '1');
+            }
+            table[n].symbol = (unsigned char)s;
+            table[n].length = (unsigned char)lengths[s];
+            table[n].code   = acc;
+            n++;
+        }
+    }
+    *out_n = n;
+}
 
 
 void decompress_file_bin(FILE* fin, FILE* fout) {
+    // 讀 Header
+    uint32_t original_size = 0;
+    uint8_t  limitL = 0;
+    int lengths[MAX_SYMBOLS] = {0};
+    int num_symbols = read_header(fin, &original_size, &limitL, lengths);
+    if (num_symbols < 0) {
+        fprintf(stderr, "decode header error\n");
+        return;
+    }
+
+    // 用 lengths 重建 canonical codes
     CodeEntry table[MAX_SYMBOLS];
-    int num_symbols = read_huffman_table(fin, table);
-    print_huffman_table(table, num_symbols);
-    printf("num_symbols: %d\n", num_symbols);
+    build_codes_from_lengths(lengths, table, &num_symbols);
 
-    unsigned char buffer = 0;
-    int bits_in_buffer = 0;
-    unsigned int bit_acc = 0;   // 暫存 bits
+    // 逐位元解碼，直到寫滿 original_size
+    uint32_t remain = original_size;
+    unsigned int bit_acc = 0;
     int bit_count = 0;
-
     int c;
-    while ((c = fgetc(fin)) != EOF) {
-        printf("c: %d\n", c);
-        buffer = (unsigned char)c;
-        for (int i = 7; i >= 0; i--) {
-            bit_acc = (bit_acc << 1) | ((buffer >> i) & 1);
-            printf("bit_acc: %u\n", bit_acc);
+
+    while (remain > 0 && (c = fgetc(fin)) != EOF) {
+        unsigned char byte = (unsigned char)c;
+
+        // （可選）debug：看讀到的 byte
+        // printf("byte: dec=%3d hex=0x%02X bin=", byte, byte);
+        // for (int k = 7; k >= 0; k--) printf("%d", (byte >> k) & 1);
+        // printf("\n");
+
+        for (int i = 7; i >= 0 && remain > 0; i--) {
+            int bit = (byte >> i) & 1;
+            bit_acc = (bit_acc << 1) | bit;
             bit_count++;
-            printf("bit_count: %d", bit_count);
-            printf("\n");
-            // 嘗試匹配 table
+
+            // （可選）debug：看現在 bit_acc（bit_count 位）
+            // printf("bit_acc (%2d bits) = ", bit_count);
+            // for (int k = bit_count - 1; k >= 0; k--) printf("%d", (bit_acc >> k) & 1);
+            // printf("\n");
+
+            // 嘗試匹配
             for (int j = 0; j < num_symbols; j++) {
-                uint32_t code_masked = table[j].code & ((1 << table[j].length) - 1);
                 if (bit_count == table[j].length && bit_acc == table[j].code) {
-                    printf("bit_acc (%2d bits) = ", bit_count);
-                    for (int k = bit_count - 1; k >= 0; k--) {
-                        printf("%d", (bit_acc >> k) & 1);
-                    }
-                    printf("\n");
                     fputc(table[j].symbol, fout);
                     bit_acc = 0;
                     bit_count = 0;
+                    remain--;              // ✅ 解到一個就扣，remain==0 立刻停
                     break;
                 }
             }
         }
     }
+
+    if (remain != 0) {
+        fprintf(stderr, "ERROR: unexpected EOF, still need %u bytes\n", remain);
+    }
 }
+
 
 
 int main(int argc, char *argv[]) {
