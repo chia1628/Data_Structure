@@ -28,13 +28,13 @@ typedef struct {
     unsigned int code; // 用整數存 bit
 } HuffmanCodeEntry;
 
+//
 typedef struct {
-    int symbols[MAX_SYMBOLS]; // 包含的原符號索引
-    int count;
-} PseudoSymbol;
+    unsigned int code;
+    unsigned char length;
+    unsigned char symbol;
+} CodeEntry;
 
-PseudoSymbol pseudo[MAX_PSEUDO]; // pseudo-symbol 映射表
-int pseudo_count = 0;
 
 // 計算出現頻率
 int count_frequency(FILE* fin, int * fre_array){
@@ -56,11 +56,11 @@ int count_frequency(FILE* fin, int * fre_array){
     return 0;
 }
 
-HuffmanNode* build_huffman_tree(int freq[MAX_SYMBOLS]) {
+HuffmanNode* build_huffman_tree(int freq[MAX_SYMBOLS]) { //建立Huffman_tree
     int n = 0; // 葉子數量
     HuffmanNode* nodes[MAX_SYMBOLS];
 
-    // 1. 生成初始節點
+    // 生成初始節點，使用n個符號就有n個點
     for (int i = 0; i < MAX_SYMBOLS; i++) {
         if (freq[i] > 0) {
             nodes[n] = (HuffmanNode*)malloc(sizeof(HuffmanNode));
@@ -71,7 +71,7 @@ HuffmanNode* build_huffman_tree(int freq[MAX_SYMBOLS]) {
         }
     }
 
-    // 2. 合併節點
+    // 合併節點
     while (n > 1) {
         // 找出最小兩個節點
         int min1 = -1, min2 = -1;
@@ -84,8 +84,8 @@ HuffmanNode* build_huffman_tree(int freq[MAX_SYMBOLS]) {
                 min2 = i;
             }
         }
-        // 找好兩個小的
-        // 建立新父節點
+
+        // 找好兩個小的後建立新父節點
         HuffmanNode* parent = (HuffmanNode*)malloc(sizeof(HuffmanNode));
         parent->symbol = 0; // internal node 沒有符號
         parent->freq = nodes[min1]->freq + nodes[min2]->freq;
@@ -102,69 +102,74 @@ HuffmanNode* build_huffman_tree(int freq[MAX_SYMBOLS]) {
         nodes[min2] = nodes[n-1]; // 移除 min2
         n--;
     }
-
     return nodes[0]; // 根節點
 }
 
-void display_huffman_tree(HuffmanNode* node, int level) {
-    if (!node) return;
-
-    // 先顯示右子節點（這樣顯示時，樹的右邊在上）
-    display_huffman_tree(node->right, level + 1);
-
-    // 縮排
-    for (int i = 0; i < level; i++){
-        printf("    ");
-    } 
-
-    // 如果是葉節點，顯示符號和頻率
-    if (!node->left && !node->right) { //兩個都是null
-        if (node->symbol >= 32 && node->symbol <= 126) {
-            printf("'%c' (%d)\n", node->symbol, node->freq);
-        } 
-        else {
-            printf("0x%02X (%d)\n", node->symbol, node->freq);
+int write_header(FILE* fout, uint32_t original_size, uint8_t limit_L, const int lengths[256]) { // 寫入壓縮檔案 output.bin
+    
+    if (fwrite(&original_size, sizeof(uint32_t), 1, fout) != 1) { //寫入原始資料大小 original_size
+        return -1;
+    }
+    uint16_t num = 0;
+    for (int i = 0; i < 256; i++) {// 計算出所有碼字長度大於 0 的符號數量
+        if (lengths[i] > 0) {
+            num++;
         }
-    } 
-    else {
-        printf("* (%d)\n", node->freq); // internal node
     }
 
-    // 左子節點
-    display_huffman_tree(node->left, level + 1);
-}
-// ---------------- Write Compressed File ----------------
-// ===== Header: "HUF1" + original_size + L + num_symbols + (symbol, length)*n =====
-static int write_header(FILE* fo, uint32_t original_size, uint8_t limit_L, const int lengths[256]) {
-    if (fwrite("HUF1", 1, 4, fo) != 4) return -1;
-    if (fwrite(&original_size, sizeof(uint32_t), 1, fo) != 1) return -1;
-    if (fwrite(&limit_L, 1, 1, fo) != 1) return -1;
+    if (fwrite(&num, sizeof(uint16_t), 1, fout) != 1) { // 將 num 寫入檔案
+        return -1;
+    }
 
-    uint16_t num = 0;
-    for (int i = 0; i < 256; i++) if (lengths[i] > 0) num++;
-    if (fwrite(&num, sizeof(uint16_t), 1, fo) != 1) return -1;
-
-    for (int i = 0; i < 256; i++) {
+    for (int i = 0; i < 256; i++) { //寫入每個有效符號及其碼字長度
         if (lengths[i] > 0) {
             unsigned char s = (unsigned char)i;
             unsigned char L  = (unsigned char)lengths[i];
-            if (fwrite(&s, 1, 1, fo) != 1) return -1;
-            if (fwrite(&L, 1, 1, fo) != 1) return -1;
+            if (fwrite(&s, 1, 1, fout) != 1) {
+                return -1;
+            }
+            if (fwrite(&L, 1, 1, fout) != 1) {
+                return -1;
+            } 
         }
     }
     return 0;
 }
 
+int read_header(FILE* fbin, uint32_t* original_size, uint8_t* limit_L, int lengths[256]) { // 讀取壓縮檔案 output.bin
 
-void compress_file_bin(FILE* fin, FILE* fout, char codes[MAX_SYMBOLS][MAX_CODE_LEN],
-                       uint32_t original_size, int lengths[256], int limit_length) {
+    if (fread(original_size, sizeof(uint32_t), 1, fbin) != 1) { // 讀取原始大小
+        return -1;
+    } 
+    uint16_t num = 0;
+    if (fread(&num, sizeof(uint16_t), 1, fbin) != 1) { // 讀取有效符號數量
+        return -2;
+    }
+
+    memset(lengths, 0, 256 * sizeof(int)); // 初始化長度陣列
+    for (uint16_t i = 0; i < num; i++) { // 讀取符號及其碼字長度
+        unsigned char sym, len;
+        if (fread(&sym, 1, 1, fbin) != 1){
+            return -3;
+        }
+        if (fread(&len, 1, 1, fbin) != 1){
+           return -4; 
+        } 
+        lengths[sym] = (int)len;
+    }
+    return (int)num;
+}
+
+
+void compress_file_bin(FILE* fin, FILE* fout, char codes[MAX_SYMBOLS][MAX_CODE_LEN], uint32_t original_size, int lengths[256], int limit_length) {
     uint8_t Lhdr = (limit_length > 0) ? (uint8_t)limit_length : 0;
+    // 寫Header
     if (write_header(fout, original_size, Lhdr, lengths) != 0) {
         fprintf(stderr, "write header failed\n");
         exit(1);
     }
 
-    // 寫 bitstream（沿用你原本的 byte 緩衝）
+    // 寫 bitstream
     fseek(fin, 0, SEEK_SET);
     unsigned char buffer = 0;
     int bit_count = 0;
@@ -173,7 +178,9 @@ void compress_file_bin(FILE* fin, FILE* fout, char codes[MAX_SYMBOLS][MAX_CODE_L
         const char* code = codes[(unsigned char)c];
         for (int i = 0; code[i]; i++) {
             buffer <<= 1;
-            if (code[i] == '1') buffer |= 1;
+            if (code[i] == '1'){
+                buffer |= 1;
+            }
             bit_count++;
             if (bit_count == 8) {
                 fputc(buffer, fout);
@@ -191,91 +198,53 @@ void compress_file_bin(FILE* fin, FILE* fout, char codes[MAX_SYMBOLS][MAX_CODE_L
 
 // 產生編碼
 void generate_codes(HuffmanNode* node, char* code, int depth, char codes[MAX_SYMBOLS][MAX_CODE_LEN]) {
-    if (!node) return;
-
-    if (!node->left && !node->right) {
+    printf("check01\n");
+    if (!node){
+        printf("check02\n");
+        return;
+    } 
+    printf("check03\n");
+    if (!node->left && !node->right) { // 是葉子 -> 加上結尾符號
+        printf("leaves\n");
         code[depth] = '\0';
-        strncpy(codes[(unsigned char)node->symbol], code, MAX_CODE_LEN-1);
+        for(int i=0; i<depth; i++){
+            printf("%c", code[i]);
+        }
+        printf("\n");
+        strncpy(codes[(unsigned char)node->symbol], code, MAX_CODE_LEN-1); // 該symbol在codes的編號存入 code
         return;
     }
-    if (node->left) {
+    if (node->left) { // 是左邊 -> code 加上0
+        printf("left\n");
         code[depth] = '0';
+        printf("Leaf: Symbol 0x%02X, Freq: %u, Depth: %d\n", node->symbol, node->freq, depth);
         generate_codes(node->left, code, depth + 1, codes);
     }
-    if (node->right) {
+    if (node->right) { // 是左邊 -> code 加上1
+        printf("right\n");
         code[depth] = '1';
         generate_codes(node->right, code, depth + 1, codes);
     }
 }
 
-// ---------------- Free Huffman Tree ----------------
-void free_tree(HuffmanNode* node) {
-    if (!node) return;
-    free_tree(node->left);
-    free_tree(node->right);
-    free(node);
-}
-
-// ----------------- 限制長度生成 Huffman code -----------------
-void calculate_code_lengths(HuffmanNode* node, int depth, int lengths[MAX_SYMBOLS]) {
-    if (!node) return;
-
-    if (!node->left && !node->right) {
-        lengths[node->symbol] =  depth;
-        return;
-    }
-    if (node->left) calculate_code_lengths(node->left, depth + 1, lengths);
-    if (node->right) calculate_code_lengths(node->right, depth + 1, lengths);
-}
-
-// 取代原本的 fix_code_lengths（簡單、穩定、合法）
-// 規則：只針對「出現過的符號」(lengths[i] > 0) 做事；
-// 只在超過 limit_L 時才套用長度限制；否則不更動
-void fix_code_lengths(int lengths[MAX_SYMBOLS], int limit_L) {
-    if (limit_L <= 0) return;   // 沒有限制，直接用原碼長
-
-    int present[MAX_SYMBOLS];
-    int k = 0, max_len = 0;
-
-    // 蒐集「真的出現過」的符號，並找原本的最大碼長
-    for (int i = 0; i < MAX_SYMBOLS; i++) {
-        if (lengths[i] > 0) {
-            present[k++] = i;
-            if (lengths[i] > max_len) max_len = lengths[i];
+void generate_limited_codes(int lengths[MAX_SYMBOLS], char codes[MAX_SYMBOLS][MAX_CODE_LEN]) {
+    // 確定最大碼字長度
+    int max_len = 0;
+    for (int i = 0; i < MAX_SYMBOLS; i++) { 
+        if (lengths[i] > max_len) {
+            max_len = lengths[i];
         }
     }
-    if (k == 0) return;                 // 空檔案之類，不處理
-    if (max_len <= limit_L) return;     // ✅ 沒超過限制：完全不更動
-
-    // 底下這段只在「真的超過」時才執行
-    if (limit_L < 31 && k > (1 << limit_L)) {
-        fprintf(stderr, "Error: L=%d CAN'T ENCODE %d SYMBOLS NEED L >= ceil(log2(%d)\n",
-                limit_L, k, k);
-        exit(1);
-    }
-
-    // 最簡、穩定的保底作法：全部設為 L（一定滿足 Kraft，確保可解）
-    for (int i = 0; i < k; i++) {
-        lengths[present[i]] = limit_L;
-    }
-}
-
-
-
-
-void generate_limited_codes(int lengths[MAX_SYMBOLS],char codes[MAX_SYMBOLS][MAX_CODE_LEN])
-{
-    int max_len = 0;
-    for (int i = 0; i < MAX_SYMBOLS; i++)
-        if (lengths[i] > max_len)
-            max_len = lengths[i];
-
+        
     // 計算每種長度的數量
     int bl_count[MAX_CODE_LEN + 1] = {0};
-    for (int i = 0; i < MAX_SYMBOLS; i++)
-        if (lengths[i] > 0)
+    for (int i = 0; i < MAX_SYMBOLS; i++){
+        if (lengths[i] > 0){
             bl_count[lengths[i]]++;
-
+        }
+    }
+        
+    // 計算每個長度的起始碼值
     int next_code[MAX_CODE_LEN + 1] = {0};
     int code = 0;
 
@@ -302,107 +271,156 @@ void generate_limited_codes(int lengths[MAX_SYMBOLS],char codes[MAX_SYMBOLS][MAX
         codes[i][len] = '\0';
     }
 }
+// 釋放 Huffman Tree 記憶體
+void free_tree(HuffmanNode* node) {
+    if (!node) return;
+    free_tree(node->left);
+    free_tree(node->right);
+    free(node);
+}
+
+//  計算現在的每個Huffman code的長度
+void calculate_code_lengths(HuffmanNode* node, int depth, int lengths[MAX_SYMBOLS]) {
+    if (!node) return;
+
+    if (!node->left && !node->right) {
+        lengths[node->symbol] =  depth;
+        return;
+    }
+    if (node->left) calculate_code_lengths(node->left, depth + 1, lengths);
+    if (node->right) calculate_code_lengths(node->right, depth + 1, lengths);
+}
+
+
+// 只針對「出現過的符號」(lengths[i] > 0) 做事
+// 只在超過 limit_length 時才套用長度限制
+// 將每個符號的長度都改成 limit_length
+// 否則不更動
+int fix_code_lengths(int lengths[MAX_SYMBOLS], int limit_length, char codes[MAX_SYMBOLS][MAX_CODE_LEN]) {
+    if (limit_length <= 0) { // 沒有限制，直接用原碼長
+        return 0; 
+    }
+    int present[MAX_SYMBOLS];
+    int k = 0, max_len = 0;
+
+    // 蒐集「真的出現過」的符號，並找原本的最大碼長
+    for (int i = 0; i < MAX_SYMBOLS; i++) {
+        if (lengths[i] > 0) {
+            present[k++] = i;
+            if (lengths[i] > max_len) max_len = lengths[i];
+        }
+    }
+    if (k == 0) return 0;                 // 空檔案之類，不處理
+    if (max_len <= limit_length){
+        return 0; 
+    }
+    else{
+        // 底下這段只在最長 code 超過 limit_length 時才執行
+        if (limit_length < 31 && k > (1 << limit_length)) {
+            fprintf(stderr, "Error: L=%d CAN'T ENCODE %d SYMBOLS NEED L >= ceil(log2(%d)\n", limit_length, k, k);
+            exit(1);
+        }
+
+        // 將每個 code 全部設為 L，確保可解
+        for (int i = 0; i < k; i++) {
+            lengths[present[i]] = limit_length;
+        }
+        return 1;     // 沒超過限制：完全不更動
+    }
+}
+
+
+
+
+
+
 
 void compress(FILE* fin, FILE* fout, int limit_length){
     int freq[MAX_SYMBOLS] = {0};
     count_frequency(fin, freq);
 
-    // 算原始長度（直接把 freq 加總）
+    // 把 freq 加總算原始長度
     uint32_t original_size = 0;
-    for (int i = 0; i < MAX_SYMBOLS; i++) original_size += (uint32_t)freq[i];
-
-    HuffmanNode* root = build_huffman_tree(freq);
+    for (int i = 0; i < MAX_SYMBOLS; i++) {
+       original_size += (uint32_t)freq[i]; 
+    } 
 
     int lengths[MAX_SYMBOLS] = {0};
-    calculate_code_lengths(root, 0, lengths);
-    fix_code_lengths(lengths, limit_length);
-
     char codes[MAX_SYMBOLS][MAX_CODE_LEN];
-    for (int i = 0; i < MAX_SYMBOLS; i++) codes[i][0] = '\0';
-    generate_limited_codes(lengths, codes);
 
-    // ✅ 新版：帶 original_size + lengths
+    for (int i = 0; i < MAX_SYMBOLS; i++){ // 初始化
+       codes[i][0] = '\0'; 
+    } 
+    char code_buffer[MAX_CODE_LEN];
+    HuffmanNode* root = build_huffman_tree(freq);
+    calculate_code_lengths(root, 0, lengths);
+    int gen_mode = fix_code_lengths(lengths, limit_length, codes);
+    printf("gen_mode: %d\n" , gen_mode);
+    if(gen_mode == 1){ // 0 == no limit
+        // generate_codes(root, code_buffer, 0, codes);
+        generate_limited_codes(lengths, codes);
+    }
+    else if(gen_mode == 0){ // 1 == no limit
+        generate_limited_codes(lengths, codes);
+    }
     compress_file_bin(fin, fout, codes, original_size, lengths, limit_length);
     free_tree(root);
 }
 
 
-typedef struct {
-    unsigned int code;
-    unsigned char length;
-    unsigned char symbol;
-} CodeEntry;
 
-int read_huffman_table(FILE* fin, CodeEntry table[MAX_SYMBOLS]) {
-    int num_symbols = fgetc(fin);
-    for (int i = 0; i < num_symbols; i++) {
-        unsigned char symbol = fgetc(fin);
-        unsigned char len = fgetc(fin);
-        uint32_t bits = 0;
-        int bytes_needed = (len + 7) / 8;
-        for (int b = 0; b < bytes_needed; b++) {
-            int byte = fgetc(fin);
-            bits = (bits << 8) | (byte & 0xFF);
-        }
-        table[i].symbol = symbol;
-        table[i].length = len;
-        table[i].code = bits;
-    }
-    return num_symbols;
-}
-void print_huffman_table(CodeEntry table[MAX_SYMBOLS], int num_symbols) {
-    printf("Huffman Table (%d symbols):\n", num_symbols);
-    for (int i = 0; i < num_symbols; i++) {
-        printf("Symbol %d ", table[i].symbol);
-        if (table[i].symbol >= 32 && table[i].symbol <= 126)
-            printf("('%c') ", table[i].symbol);
-        printf(": Code length = %d, Code = ", table[i].length);
 
-        // 印 bits
-        for (int b = table[i].length - 1; b >= 0; b--) {
-            printf("%d", (table[i].code >> b) & 1);
-        }
-        printf("\n");
-    }
-}
-static int read_header(FILE* fi, uint32_t* original_size, uint8_t* limit_L, int lengths[256]) {
-    char magic[4];
-    if (fread(magic, 1, 4, fi) != 4) return -1;
-    if (memcmp(magic, "HUF1", 4) != 0) return -2;
-    if (fread(original_size, sizeof(uint32_t), 1, fi) != 1) return -3;
-    if (fread(limit_L, 1, 1, fi) != 1) return -4;
-    uint16_t num = 0;
-    if (fread(&num, sizeof(uint16_t), 1, fi) != 1) return -5;
-
-    memset(lengths, 0, 256 * sizeof(int));
-    for (uint16_t i = 0; i < num; i++) {
-        unsigned char sym, len;
-        if (fread(&sym, 1, 1, fi) != 1) return -6;
-        if (fread(&len, 1, 1, fi) != 1) return -7;
-        lengths[sym] = (int)len;
-    }
-    return (int)num;
-}
 
 // 由 lengths 依 canonical 規則重建 bit pattern（用你現有的 generate_limited_codes）
+// 由 lengths 依 canonical 規則重建 bit pattern，並印出碼表
 static void build_codes_from_lengths(const int lengths[256], CodeEntry table[256], int* out_n) {
     char codes[256][MAX_CODE_LEN];
     for (int i = 0; i < 256; i++) codes[i][0] = '\0';
+    // 步驟 1: 生成規範霍夫曼碼字串
     generate_limited_codes((int*)lengths, codes);
 
     int n = 0;
+    
+    // --- 輸出表格標題 ---
+    printf("\n======================================================\n");
+    printf("| 符號 (Sym) | Length | Code (Binary)             | Code (Dec) |\n");
+    printf("======================================================\n");
+    
+    // 步驟 2: 遍歷所有符號，組裝 CodeEntry 並輸出
     for (int s = 0; s < 256; s++) {
         if (lengths[s] > 0) {
             unsigned acc = 0;
+            
+            // 步驟 2a: 將二進位碼字串轉換為整數 (acc)
             for (int k = 0; codes[s][k]; k++) {
                 acc = (acc << 1) | (codes[s][k] == '1');
             }
+            
+            // 步驟 2b: 組裝 CodeEntry 結構
             table[n].symbol = (unsigned char)s;
             table[n].length = (unsigned char)lengths[s];
             table[n].code   = acc;
+
+            // 步驟 2c: 格式化輸出表格行
+            
+            // 輸出符號：Hex/Dec/Char
+            printf("| 0x%02X (%3d) '%c' |", s, s, 
+                   (s >= 32 && s <= 126) ? s : '.'); // 可列印字元直接顯示，否則顯示 '.'
+
+            // 輸出長度
+            printf(" %6d |", lengths[s]);
+
+            // 輸出二進位碼字串
+            printf(" %-25s |", codes[s]); 
+            
+            // 輸出碼值 (十進位)
+            printf(" %10u |\n", acc); 
+            
             n++;
         }
     }
+    printf("======================================================\n");
+
     *out_n = n;
 }
 
@@ -553,6 +571,9 @@ int main(int argc, char *argv[]) {
         }
         decompress_file_bin(fin, fout);
     }
+
+
+    
 
     return 0;
 }
