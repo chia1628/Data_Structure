@@ -66,7 +66,7 @@ void print_level(Stack *s, int level, int max_n) {
  * 主要函式：印出三根柱子的完整狀態
  */
 void printTowers_visual(HanoiContext *ctx) {
-    gotoxy(20, 3); // 回到左上角，而不是清除螢幕
+    gotoxy(20, 12); // 回到左上角，而不是清除螢幕
     // 取得最大盤子數 N (假設 A 柱的 capacity 就是 N)
     int n = ctx->A.capacity;
 
@@ -157,7 +157,7 @@ void moveDisk(HanoiContext *ctx, Stack *from, Stack *to) {
     ctx->stepCount++;
     printTowers_visual(ctx);
     wait_for_a_while();
-    increment_step(); // <--- 呼叫這一行！
+    increment_step();
     printf("Step %llu: move disk %d from %c to %c\n",
            ctx->stepCount, disk, from->name, to->name);
     printTowers_visual(ctx);
@@ -176,7 +176,6 @@ void hanoi_rec(HanoiContext *ctx, int n, Stack *from, Stack *aux, Stack *to) {
 void solve_hanoi(int n) {
     HanoiContext ctx;
     ctx.stepCount = 0;
-    clear_screen();
     printf("\nWe got %d disks.\n", n);
     initStack(&ctx.A, 'A', n);
     initStack(&ctx.B, 'B', n);

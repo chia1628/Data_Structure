@@ -6,7 +6,9 @@
         "MAIN.C": "cpp",
         "main.c.C": "cpp",
         "main": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "hanoi.h": "c",
+        "nine_ring.h": "c"
     },
     "python-envs.defaultEnvManager": "ms-python.python:conda",
     "python-envs.defaultPackageManager": "ms-python.python:conda",

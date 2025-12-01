@@ -27,7 +27,10 @@ typedef struct {
  * @param n 盤子的數量
  * 執行後會自動印出過程與總步數，並釋放記憶體。
  */
+void gotoxy(int x, int y);
+void wait_for_a_while();
 void solve_hanoi(int n);
+void clear_screen();
 
 // 如果主程式需要單獨控制 Stack 或其他細節，
 // 可以選擇性公開以下函式 (若不需要可保留在 .c 內當作內部函式)：

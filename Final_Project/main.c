@@ -2,11 +2,11 @@
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
+#include <stdbool.h>  // For boolean data type (bool, true, false)
 #include "common.h"     // Include shared definitions
 #include "hanoi.h"      // Include Student A's header file
 #include "nine_ring.h"  // Include Student B's header file
 #include <windows.h>
-
 
 // The place where the global variable is actually defined
 unsigned long long global_step_count = 0;
@@ -39,13 +39,39 @@ unsigned long long calc_nine_ring_theoretical(int n) {
     // Temporarily return 0 or a formula you found
     return 0; 
 }
+void clear_input_buffer() {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF) {
+        // 丟棄所有字元
+    }
+}
 
+void pause_until_enter() {
+    // 1. 清空任何殘留的輸入
+    clear_input_buffer(); 
+
+    bool keep_going = false;
+    printf("Press Enter to return to main menu...");
+    fflush(stdout); // 確保提示文字立即顯示
+
+    while(!keep_going){
+        if (getchar() == '\n') {
+            keep_going = true;
+        }
+    }
+}
 int main() {
     int choice, n;
     clock_t start_time, end_time;
     double time_taken;
+    bool invalid = false;
 
     while(1) {
+        clear_screen();
+        if(invalid){
+            printf("Invalid choice. Please select 1, 2, or 3.\n");
+            invalid = false;
+        }
         printf("\n===========================================\n");
         printf(" The Intersection of Recursive Mysteries: \n");
         printf("     Nine Linked Rings & Tower of Hanoi    \n"); // [cite: 2]
@@ -60,12 +86,15 @@ int main() {
             while(getchar() != '\n');
             continue;
         }
-
         if (choice == 3) {
             printf("Thank you for using the program. Goodbye!\n");
             break;
         }
-
+        else if(choice != 1 && choice != 2) {
+            invalid = true;
+            // printf("Invalid choice. Please select 1, 2, or 3.\n");
+            continue;
+        }
         printf("Please enter the value of N (recommended 1–15, large values may take long): ");
         scanf("%d", &n);
 
@@ -83,17 +112,64 @@ int main() {
             solve_hanoi(n);
             
         } 
-        // else if (choice == 2) {
-        //     printf("\n--- Starting Nine Linked Rings (N=%d) ---\n", n);
-            
-        //     // Call Student B's initialization + solver function
-        //     // Assuming B provided this interface:
-        //     NineRingState game;
-        //     init_nine_rings(&game, n); // written by Student B
-        //     // The goal of Nine Linked Rings is to remove all rings
-        //     remove_all_rings(&game, n); // written by Student B
-        // }
+        else if (choice == 2) {
+            printf("\n--- Starting Nine Linked Rings (N=%d) ---\n", n);
+            // Dynamic memory allocation for Xring array
+	        int *Xring; // Pointer for dynamic array
+            Xring = (int *)malloc(n * sizeof(int));
+            if (Xring == NULL) {
+                printf("Memory allocation failed.\n");
+                return 1;
+            }
 
+            // --- MODIFICATION START ---
+            // Force the initial state to all rings ON (all '1's)
+            if (n > 0) {
+                for (int i = 0; i < n; i++) {
+                    Xring[i] = 1;
+                }
+            }
+            printf("\nInitial state set to all rings ON (111...): \n");
+            // --- MODIFICATION END ---
+
+            gotoxy(20, 12); // 回到左上角，而不是清除螢幕
+            printf("The rings state of %d-Linked Ring is: ", n);
+            print_ring(1, n, Xring);
+            wait_for_a_while();
+            printf("\n");
+            if(n != 0){
+            // }{
+                printf("\nLet's start to solve the %d-Linked Ring.\n", n);
+
+                // When starting state is all '1's, the number of 'on' rings (X) is always odd.
+                // Therefore, it should always start with R-rule (for N-Linked Rings starting from 11...1 to 00...0).
+
+                if(find_lead(n, Xring) == -1) printf("The %d-Linked Ring is already solved!\n", n);
+                else if(on_ring(n, Xring, 0) % 2 == 1){
+                    // For the starting state 11...1, on_ring(X) = X.
+                    // If X is odd, start with R. If X is even, start with S.
+                    // Since the final move is R-rule (to turn 1st ring from 1 to 0),
+                    // The standard solution for 11..1 to 00..0 uses the parity of X.
+
+                    // Your original code's logic is based on the *current* state.
+                    // For 11...1, on_ring(X) = X.
+
+                    if(n % 2 == 1){
+                        printf("Start with R-rule !! (since %d rings are ON and it's odd)\n", n);
+                        solve_Xring('R', n, Xring, 1);
+                    } 
+                    else {
+                        printf("Start with S-rule !! (since %d rings are ON and it's even)\n", n);
+                        solve_Xring('S', n, Xring, 1);
+                    }
+                }
+                else{
+                    printf("Start with S-rule !! (since %d rings are ON and it's even)\n", n);
+                    solve_Xring('S', n, Xring, 1);
+                }
+	        }
+        }
+        
         // Stop timing
         end_time = clock();
         time_taken = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
@@ -124,6 +200,9 @@ int main() {
         // Verify exponential growth
         printf("Complexity estimate    : O(2^%d)\n", n);
         printf("----------------------------------------\n");
+        bool keep_going = false;
+        pause_until_enter();
+        printf("Exited loop!\n");
     }
 
     return 0;
