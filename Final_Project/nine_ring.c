@@ -31,7 +31,7 @@ int find_lead(int cnt_lead, int Xring[])
 void solve_Xring(char cmd, int X, int Xring[], int cnt_move){
     increment_step();
 	int lead = find_lead(X, Xring);
-	gotoxy(0, 20); // 回到左上角，而不是清除螢幕
+	gotoxy(0, 10); // 回到左上角，而不是清除螢幕
 	if (lead == -1) {
 		// This should theoretically not be hit if the call is made correctly,
         // as the solved state (-1) is checked before the recursive call.

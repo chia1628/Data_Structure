@@ -103,10 +103,11 @@ int main() {
 
         // Start timing
         start_time = clock();
-
+        
+        clear_screen();
         if (choice == 1) {
-            printf("\n--- Starting Tower of Hanoi (N=%d) ---\n", n);
-            printf("\nInitial state set to all disks ON stack A\n");
+            printf("--- Starting Tower of Hanoi (N=%d) ---\n", n);
+            printf("Initial state set to all disks ON stack A\n");
             // Call Student A's initialization + solver function
             // Assuming A provided this interface:
             solve_hanoi(n);

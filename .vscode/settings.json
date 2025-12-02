@@ -8,7 +8,8 @@
         "main": "c",
         "stdio.h": "c",
         "hanoi.h": "c",
-        "nine_ring.h": "c"
+        "nine_ring.h": "c",
+        "common.h": "c"
     },
     "python-envs.defaultEnvManager": "ms-python.python:conda",
     "python-envs.defaultPackageManager": "ms-python.python:conda",

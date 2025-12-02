@@ -12,13 +12,14 @@ void gotoxy(int x, int y) {
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
 }
 
-void wait_for_a_while() {
+void wait_for_a_while(int milliseconds) {
     #ifdef _WIN32
-        Sleep(500); // 暫停 200 毫秒 (Windows)
+        Sleep(milliseconds); // 暫停 200 毫秒 (Windows)
     #else
         usleep(5000000); // 暫停 1,000,000 微秒 = 200 毫秒 (Linux/Mac)
     #endif
 }
+
 void clear_screen() {
     #ifdef _WIN32
         system("cls");   // Windows 用這個
@@ -70,7 +71,7 @@ void printTowers_visual(HanoiContext *ctx) {
     // 取得最大盤子數 N (假設 A 柱的 capacity 就是 N)
     int n = ctx->A.capacity;
 
-    printf("\n=== Step: %llu ===\n", ctx->stepCount);
+    printf("\n=== Step: %llu ======================\n", ctx->stepCount);
 
     // 從最高層 (n-1) 往下掃描到最底層 (0)
     for (int i = n - 1; i >= 0; i--) {
@@ -90,7 +91,7 @@ void printTowers_visual(HanoiContext *ctx) {
         for (int i = 0; i < n; i++) printf(" ");
         printf("  ");
     }
-    printf("\n==================\n");
+    printf("\n==================================\n");
 }
 void initStack(Stack *s, char name, int capacity) {
     s->data = (int *)malloc(sizeof(int) * capacity);
@@ -151,34 +152,32 @@ void printTowers(HanoiContext *ctx) {
     printf("-------------------------------\n");
 }
 
-void moveDisk(HanoiContext *ctx, Stack *from, Stack *to) {
+void moveDisk(HanoiContext *ctx, Stack *from, Stack *to, int total_disks) {
     int disk = popStack(from);
     push(to, disk);
     ctx->stepCount++;
-    gotoxy(20, 12); // 回到左上角，而不是清除螢幕
+    gotoxy(20, total_disks+8); // 回到左上角，而不是清除螢幕
     printTowers_visual(ctx);
 
     increment_step();
     printf("Step %llu: move disk %d from %c to %c\n",
            ctx->stepCount, disk, from->name, to->name);
-    wait_for_a_while();
+    wait_for_a_while(500);
 }
 
-void hanoi_rec(HanoiContext *ctx, int n, Stack *from, Stack *aux, Stack *to) {
+void hanoi_rec(HanoiContext *ctx, int n, Stack *from, Stack *aux, Stack *to, int total_disks) {
     if (n == 1) {
-        moveDisk(ctx, from, to);
+        moveDisk(ctx, from, to, total_disks);
         return;
     }
-    hanoi_rec(ctx, n - 1, from, to, aux);
-    moveDisk(ctx, from, to);
-    hanoi_rec(ctx, n - 1, aux, from, to);
+    hanoi_rec(ctx, n - 1, from, to, aux, total_disks);
+    moveDisk(ctx, from, to, total_disks);
+    hanoi_rec(ctx, n - 1, aux, from, to, total_disks);
 }
 
 void solve_hanoi(int n) {
     HanoiContext ctx;
     ctx.stepCount = 0;
-    clear_screen();
-    printf("\nWe got %d disks.\n", n);
     initStack(&ctx.A, 'A', n);
     initStack(&ctx.B, 'B', n);
     initStack(&ctx.C, 'C', n);
@@ -187,7 +186,7 @@ void solve_hanoi(int n) {
         push(&ctx.A, i);
     }
     printTowers_visual(&ctx);
-    hanoi_rec(&ctx, n, &ctx.A, &ctx.B, &ctx.C);
+    hanoi_rec(&ctx, n, &ctx.A, &ctx.B, &ctx.C, n);
     printf("\nTotal steps: %llu\n", ctx.stepCount);
 
     free(ctx.A.data);
