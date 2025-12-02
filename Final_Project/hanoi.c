@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <windows.h> // 為了使用 Sleep
-#include "common.h" 
+#include "common.h"
 #include "hanoi.h"
 
 // 定義一個函式把游標移到 x, y
@@ -16,7 +16,7 @@ void wait_for_a_while() {
     #ifdef _WIN32
         Sleep(500); // 暫停 200 毫秒 (Windows)
     #else
-        usleep(200000); // 暫停 200,000 微秒 = 200 毫秒 (Linux/Mac)
+        usleep(5000000); // 暫停 1,000,000 微秒 = 200 毫秒 (Linux/Mac)
     #endif
 }
 void clear_screen() {
@@ -29,7 +29,7 @@ void clear_screen() {
 
 void print_level(Stack *s, int level, int max_n) {
     int disk_size = 0;
-    
+
     // 檢查這一層是否有盤子
     // s->top 是目前最上方盤子的索引，如果 level <= top 表示這層有東西
     if (level <= s->top) {
@@ -59,14 +59,14 @@ void print_level(Stack *s, int level, int max_n) {
     for (int i = 0; i < padding; i++) printf(" ");
 
     // 6. 柱子之間的間隔 (例如空 2 格)
-    printf("  "); 
+    printf("  ");
 }
 
 /**
  * 主要函式：印出三根柱子的完整狀態
  */
 void printTowers_visual(HanoiContext *ctx) {
-    gotoxy(20, 12); // 回到左上角，而不是清除螢幕
+
     // 取得最大盤子數 N (假設 A 柱的 capacity 就是 N)
     int n = ctx->A.capacity;
 
@@ -155,12 +155,13 @@ void moveDisk(HanoiContext *ctx, Stack *from, Stack *to) {
     int disk = popStack(from);
     push(to, disk);
     ctx->stepCount++;
+    gotoxy(20, 12); // 回到左上角，而不是清除螢幕
     printTowers_visual(ctx);
-    wait_for_a_while();
+
     increment_step();
     printf("Step %llu: move disk %d from %c to %c\n",
            ctx->stepCount, disk, from->name, to->name);
-    printTowers_visual(ctx);
+    wait_for_a_while();
 }
 
 void hanoi_rec(HanoiContext *ctx, int n, Stack *from, Stack *aux, Stack *to) {
@@ -176,16 +177,17 @@ void hanoi_rec(HanoiContext *ctx, int n, Stack *from, Stack *aux, Stack *to) {
 void solve_hanoi(int n) {
     HanoiContext ctx;
     ctx.stepCount = 0;
+    clear_screen();
     printf("\nWe got %d disks.\n", n);
     initStack(&ctx.A, 'A', n);
     initStack(&ctx.B, 'B', n);
     initStack(&ctx.C, 'C', n);
-    
+
     for (int i = n; i >= 1; i--) {
         push(&ctx.A, i);
     }
+    printTowers_visual(&ctx);
     hanoi_rec(&ctx, n, &ctx.A, &ctx.B, &ctx.C);
-
     printf("\nTotal steps: %llu\n", ctx.stepCount);
 
     free(ctx.A.data);
