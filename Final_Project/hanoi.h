@@ -28,7 +28,7 @@ typedef struct {
  * 執行後會自動印出過程與總步數，並釋放記憶體。
  */
 void gotoxy(int x, int y);
-void wait_for_a_while();
+void wait_for_a_while(int milliseconds);
 void solve_hanoi(int n);
 void clear_screen();
 

@@ -156,7 +156,7 @@ void moveDisk(HanoiContext *ctx, Stack *from, Stack *to, int total_disks) {
     int disk = popStack(from);
     push(to, disk);
     ctx->stepCount++;
-    gotoxy(20, total_disks+8); // 回到左上角，而不是清除螢幕
+    //gotoxy(20, total_disks+8); // 回到左上角，而不是清除螢幕
     printTowers_visual(ctx);
 
     increment_step();
