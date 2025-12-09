@@ -12,5 +12,12 @@ extern unsigned long long global_step_count;
 // 這樣你的主程式才能統計到他們的動作
 void increment_step();
 
+void wait_for_a_while(int milliseconds);
+
+void clear_screen();
+
+void gotoxy(int x, int y);
+
+void hide_cursor(void);
 #endif
 

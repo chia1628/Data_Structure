@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "hanoi.h"
+#include "hanoi.h" // 假設您有 header，或者如果這是單一檔案，請確保結構定義在上方
+#include "common.h" // 假設您有 header，或者如果這是單一檔案，請確保結構定義在上方
 
 // 跨平台支援 Sleep 與清畫面
 #ifdef _WIN32
@@ -8,13 +9,6 @@
 #else
     #include <unistd.h>
 #endif
-
-
-
-// ==========================================
-// 2. 系統輔助函式
-// ==========================================
-
 
 
 void initStack(Stack *s, char name, int capacity) {
@@ -58,18 +52,16 @@ Stack* getStackByName(HanoiContext *ctx, char name) {
 }
 
 // ==========================================
-// 3. 視覺化核心 (Visual Core)
+// 視覺化核心 (Visual Core)
 // ==========================================
 
 void print_level(Stack *s, int level, int max_n) {
     int disk_size = 0;
-    char disk_color = '='; // 預設樣式
+    char disk_color = '='; 
 
-    // 檢查這一層是否有盤子
     if (level <= s->top) {
         disk_size = s->data[level].size;
         char c = s->data[level].color;
-        // 如果有特定顏色，使用該字母繪製盤子
         if (c == 'R' || c == 'B') {
             disk_color = c;
         }
@@ -77,38 +69,25 @@ void print_level(Stack *s, int level, int max_n) {
 
     int padding = max_n - disk_size;
 
-    // 1. 左側空白
     for (int i = 0; i < padding; i++) printf(" ");
-
-    // 2. 盤子左半
     if (disk_size > 0) {
         for (int i = 0; i < disk_size; i++) printf("%c", disk_color);
     }
-
-    // 3. 柱子
     printf("|");
-
-    // 4. 盤子右半
     if (disk_size > 0) {
         for (int i = 0; i < disk_size; i++) printf("%c", disk_color);
     }
-
-    // 5. 右側空白
     for (int i = 0; i < padding; i++) printf(" ");
-
-    // 6. 柱子間隔
     printf("  ");
 }
 
 void printTowers_visual(HanoiContext *ctx) {
-    // 清空畫面以產生動畫效果
     clear_screen();
 
     int n = ctx->A.capacity; 
 
     printf("\n=== Step: %llu ======================\n", ctx->stepCount);
 
-    // 從最高層往下印
     for (int i = n - 1; i >= 0; i--) {
         print_level(&ctx->A, i, n);
         print_level(&ctx->B, i, n);
@@ -116,7 +95,6 @@ void printTowers_visual(HanoiContext *ctx) {
         printf("\n");
     }
 
-    // 印出底部柱子名稱
     for (int k = 0; k < 3; k++) {
         for (int i = 0; i < n; i++) printf(" ");
         if (k == 0) printf("A");
@@ -127,12 +105,11 @@ void printTowers_visual(HanoiContext *ctx) {
     }
     printf("\n==================================\n");
     
-    // 如果需要看清楚每一步，可以在這裡加一點延遲
-    wait_for_a_while(ctx->delay_ms);
+    
 }
 
 // ==========================================
-// 4. Mode 1: 標準漢諾塔 (Standard)
+// Mode 1: 標準漢諾塔 (Standard)
 // ==========================================
 
 void moveDisk_standard(HanoiContext *ctx, Stack *from, Stack *to) {
@@ -142,6 +119,7 @@ void moveDisk_standard(HanoiContext *ctx, Stack *from, Stack *to) {
     
     printTowers_visual(ctx);
     printf("Move disk %d from %c to %c\n", d.size, from->name, to->name);
+    wait_for_a_while(ctx->delay_ms);
 }
 
 void hanoi_rec_standard(HanoiContext *ctx, int n, Stack *from, Stack *aux, Stack *to) {
@@ -158,7 +136,7 @@ void solve_standard(int n) {
     HanoiContext ctx;
     ctx.stepCount = 0;
     ctx.n = n;
-    ctx.delay_ms = 150; // 動畫速度
+    ctx.delay_ms = 500; 
 
     initStack(&ctx.A, 'A', n);
     initStack(&ctx.B, 'B', n);
@@ -169,7 +147,13 @@ void solve_standard(int n) {
         push(&ctx.A, d);
     }
 
+    // 1. 先顯示初始狀態
     printTowers_visual(&ctx);
+    printf("Press Enter to start...");
+    getchar(); // 吃掉 scanf 留下的 newline
+    getchar(); // 等待使用者按 Enter
+
+    // 3. 開始遞迴
     hanoi_rec_standard(&ctx, n, &ctx.A, &ctx.B, &ctx.C);
 
     printf("\nDone! Total steps: %llu\n", ctx.stepCount);
@@ -180,10 +164,9 @@ void solve_standard(int n) {
 }
 
 // ==========================================
-// 5. Mode 2: 雙色/奇偶漢諾塔 (Bi-Color)
+// Mode 2: 雙色/奇偶漢諾塔 (Bi-Color)
 // ==========================================
 
-// 此函式現在也使用視覺化輸出
 void moveDisk_bicolor(HanoiContext *ctx, char fromName, char toName) {
     Stack *from = getStackByName(ctx, fromName);
     Stack *to   = getStackByName(ctx, toName);
@@ -192,9 +175,9 @@ void moveDisk_bicolor(HanoiContext *ctx, char fromName, char toName) {
     push(to, d);
     ctx->stepCount++;
 
-    // 使用視覺化函式
     printTowers_visual(ctx);
     printf("Move %c%d from %c to %c\n", d.color, d.size, fromName, toName);
+    wait_for_a_while(ctx->delay_ms);
 }
 
 char thirdPeg(char a, char b) {
@@ -204,7 +187,6 @@ char thirdPeg(char a, char b) {
 }
 
 char target_of_size(int size) {
-    // 奇數盤去 C，偶數盤去 B
     return (size % 2 == 1) ? 'C' : 'B';
 }
 
@@ -239,14 +221,12 @@ void solve_bicolor(int n) {
     HanoiContext ctx;
     ctx.n = n;
     ctx.stepCount = 0;
-    ctx.delay_ms = 200; // 設定動畫延遲，讓使用者能看清楚雙色移動
+    ctx.delay_ms = 500;
 
     initStack(&ctx.A, 'A', n);
     initStack(&ctx.B, 'B', n);
     initStack(&ctx.C, 'C', n);
 
-    // 初始化：雙色盤子放入 A
-    // 奇數為 'R' (Red), 偶數為 'B' (Blue)
     for (int size = n; size >= 1; size--) {
         Disk d;
         d.size = size;
@@ -254,10 +234,13 @@ void solve_bicolor(int n) {
         push(&ctx.A, d);
     }
 
-    // 初始畫面
+    // 1. 先顯示初始狀態
     printTowers_visual(&ctx);
+    printf("Press Enter to start...");
+    getchar(); // 吃掉 scanf 留下的 newline
+    getchar(); // 等待使用者按 Enter
 
-    // 執行邏輯
+    // 3. 開始執行
     moveVar(&ctx, n, 'A');
 
     printf("\nDone! Final state shown above.\n");
@@ -268,14 +251,13 @@ void solve_bicolor(int n) {
     freeStack(&ctx.C);
 }
 
-// // ==========================================
-// // 6. 主程式 (Main)
-// // ==========================================
+// ==========================================
+// 主程式 (Main)
+// ==========================================
 
 // int main(void) {
 //     int choice, n;
 
-//     // 清空畫面讓開始時比較整潔
 //     clear_screen(); 
 
 //     printf("=== Hanoi Tower Visualizer ===\n");
@@ -285,17 +267,18 @@ void solve_bicolor(int n) {
 //     printf("Select Mode (1 or 2): ");
     
 //     if (scanf("%d", &choice) != 1) return 1;
-
-//     printf("Enter number of disks: ");
-//     if (scanf("%d", &n) != 1 || n <= 0) return 1;
-
 //     if (choice == 1) {
+//         printf("Enter number of disks: ");
+//         if (scanf("%d", &n) != 1 || n <= 0) return 1;
 //         solve_standard(n);
-//     } else if (choice == 2) {
+//     }
+//     else if (choice == 2) {
+//         printf("Enter number of disks: ");
+//         if (scanf("%d", &n) != 1 || n <= 0) return 1;
 //         solve_bicolor(n);
-//     } else {
+//     }
+//     else {
 //         printf("Unknown choice.\n");
 //     }
-
 //     return 0;
 // }
